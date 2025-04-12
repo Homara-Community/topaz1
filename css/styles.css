@@ -100,6 +100,63 @@
     margin-bottom: 20px;
   }
   
+  /* Song Dissector styles */
+  .song-dissector {
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    padding: 15px;
+  }
+  
+  .dissector-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  #dissectBtn {
+    background-color: var(--secondary-color);
+    font-weight: bold;
+    padding: 10px;
+  }
+  
+  #dissectBtn:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+  }
+  
+  .progress-bar {
+    width: 100%;
+    height: 20px;
+    background-color: #f5f5f5;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    margin-top: 10px;
+  }
+  
+  .progress-fill {
+    height: 100%;
+    background-color: var(--secondary-color);
+    width: 0%;
+    transition: width 0.3s;
+  }
+  
+  #componentsList {
+    list-style: none;
+    margin-top: 10px;
+  }
+  
+  #componentsList li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+  }
+  
+  #componentsList button {
+    margin-left: 10px;
+  }
+  
   /* File loader styles */
   .file-loader {
     border: 1px solid #ddd;
@@ -408,9 +465,47 @@
     padding: 15px;
   }
   
+  .editor-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+  
+  .transport-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .record-btn {
+    background-color: var(--accent-color);
+    font-weight: bold;
+  }
+  
+  .stop-record-btn {
+    background-color: #333;
+  }
+  
+  .recording-status {
+    margin-left: 10px;
+    font-weight: bold;
+  }
+  
+  .recording-status.recording {
+    color: var(--accent-color);
+    animation: blink 1s infinite;
+  }
+  
+  @keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+  }
+  
   .timeline {
-    position: relative;
-    height: 200px;
+    display: flex;
+    height: 300px;
     background-color: #f5f5f5;
     border: 1px solid #ddd;
     border-radius: var(--border-radius);
@@ -418,27 +513,99 @@
     overflow-x: auto;
   }
   
-  .track {
-    height: 40px;
-    margin: 5px;
+  .track-labels {
+    width: 100px;
+    flex-shrink: 0;
+    border-right: 1px solid #ddd;
     background-color: #eee;
-    border-radius: var(--border-radius);
+  }
+  
+  .track-label {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid #ddd;
+    font-weight: bold;
+  }
+  
+  .track-content {
+    flex-grow: 1;
+    position: relative;
+    min-width: 500px;
+  }
+  
+  .track {
+    height: 60px;
+    border-bottom: 1px solid #ddd;
     position: relative;
   }
   
   .clip {
     position: absolute;
-    height: 100%;
+    height: 80%;
+    top: 10%;
     background-color: var(--primary-color);
     border-radius: var(--border-radius);
     opacity: 0.8;
+    cursor: move;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 5px;
+  }
+  
+  .clip .clip-handle {
+    position: absolute;
+    width: 8px;
+    height: 100%;
+    top: 0;
+    background-color: rgba(0, 0, 0, 0.2);
+    cursor: ew-resize;
+  }
+  
+  .clip .clip-handle.left {
+    left: 0;
+  }
+  
+  .clip .clip-handle.right {
+    right: 0;
   }
   
   .timeline-controls {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 10px;
     align-items: center;
     margin-top: 10px;
+  }
+  
+  /* Effects panel styles */
+  .effects-panel {
+    margin-top: 20px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    padding: 15px;
+  }
+  
+  .effects-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+  }
+  
+  .effect {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-radius: var(--border-radius);
   }
   
   /* Responsive styles */
@@ -446,12 +613,12 @@
     .main-interface {
       grid-template-columns: 1fr;
     }
-    
+  
     header {
       flex-direction: column;
       align-items: flex-start;
     }
-    
+  
     .transport-controls {
       margin-top: 15px;
       width: 100%;

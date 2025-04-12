@@ -5,6 +5,7 @@ import UI from './ui.js';
 import FileHandler from './fileHandler.js';
 import AudioEngine from './audioEngine.js';
 import { FilterEffect, DelayEffect, ReverbEffect, CompressorEffect } from './effects/index.js';
+import SongDissector from './dissector/index.js';
 
 // Main application class
 class App {
@@ -16,6 +17,7 @@ class App {
         this.ui = new UI();
         this.fileHandler = null;
         this.audioEngine = null;
+        this.songDissector = null;
 
         // Effect instances
         this.effects = {
@@ -24,6 +26,10 @@ class App {
             reverb: null,
             compressor: null
         };
+
+        // Song dissector state
+        this.dissectorFile = null;
+        this.extractedComponents = [];
 
         // Playback state
         this.isPlaying = false;
@@ -77,14 +83,24 @@ class App {
             this.fileHandler = new FileHandler(this.audioContext);
             this.fileHandler.initialize(this.audioContext);
 
+            // Initialize song dissector
+            this.songDissector = new SongDissector(this.audioContext);
+            this.songDissector.initialize(this.audioContext);
+
             // Set up file handler callbacks
             this.setupFileHandlerCallbacks();
+
+            // Set up song dissector callbacks
+            this.setupDissectorCallbacks();
 
             // Create effects
             this.createEffects();
 
             // Create track editor UI
             this.ui.createTrackEditor();
+
+            // Set up additional UI event listeners
+            this.setupAdditionalUIListeners();
 
             console.log('Audio modules initialized');
         } catch (error) {
@@ -611,6 +627,340 @@ class App {
      */
     updateClip(clip) {
         console.log('Clip updated:', clip);
+    }
+
+    /**
+     * Set up song dissector callbacks
+     */
+    setupDissectorCallbacks() {
+        if (!this.songDissector) return;
+
+        // Progress update callback
+        this.songDissector.onProgressUpdate = (progress) => {
+            // Update progress bar
+            const progressFill = document.querySelector('.progress-fill');
+            if (progressFill) {
+                progressFill.style.width = `${progress}%`;
+            }
+        };
+
+        // Dissection complete callback
+        this.songDissector.onDissectionComplete = (components) => {
+            console.log('Dissection complete:', components);
+            this.extractedComponents = components;
+
+            // Show results
+            const dissectionProgress = document.getElementById('dissectionProgress');
+            const dissectionResults = document.getElementById('dissectionResults');
+            const componentsList = document.getElementById('componentsList');
+
+            if (dissectionProgress) dissectionProgress.classList.add('hidden');
+            if (dissectionResults) dissectionResults.classList.remove('hidden');
+
+            // Clear previous results
+            if (componentsList) componentsList.innerHTML = '';
+
+            // Add components to the list
+            components.forEach(component => {
+                const listItem = document.createElement('li');
+                listItem.innerHTML = `
+                    <span>${component.name}</span>
+                    <div>
+                        <button class="preview-btn" data-component-id="${component.id}">Preview</button>
+                        <button class="add-to-track-btn" data-component-id="${component.id}">Add to Track</button>
+                    </div>
+                `;
+
+                componentsList.appendChild(listItem);
+
+                // Add event listeners
+                const previewBtn = listItem.querySelector('.preview-btn');
+                const addToTrackBtn = listItem.querySelector('.add-to-track-btn');
+
+                previewBtn.addEventListener('click', () => this.previewComponent(component.id));
+                addToTrackBtn.addEventListener('click', () => this.addComponentToTrack(component.id));
+            });
+
+            // Enable dissect button
+            const dissectBtn = document.getElementById('dissectBtn');
+            if (dissectBtn) dissectBtn.disabled = false;
+        };
+
+        // Dissection error callback
+        this.songDissector.onDissectionError = (error) => {
+            console.error('Dissection error:', error);
+
+            // Show error message
+            alert(`Error dissecting song: ${error.message}`);
+
+            // Hide progress
+            const dissectionProgress = document.getElementById('dissectionProgress');
+            if (dissectionProgress) dissectionProgress.classList.add('hidden');
+
+            // Enable dissect button
+            const dissectBtn = document.getElementById('dissectBtn');
+            if (dissectBtn) dissectBtn.disabled = false;
+        };
+    }
+
+    /**
+     * Set up additional UI event listeners
+     */
+    setupAdditionalUIListeners() {
+        // Song dissector dropzone
+        const dissectorDropZone = document.getElementById('dissectorDropZone');
+        const dissectorFileInput = document.getElementById('dissectorFileInput');
+        const dissectBtn = document.getElementById('dissectBtn');
+
+        if (dissectorDropZone) {
+            dissectorDropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dissectorDropZone.classList.add('dragover');
+            });
+
+            dissectorDropZone.addEventListener('dragleave', () => {
+                dissectorDropZone.classList.remove('dragover');
+            });
+
+            dissectorDropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dissectorDropZone.classList.remove('dragover');
+
+                const files = e.dataTransfer.files;
+                if (files.length > 0 && files[0].type === 'video/mp4') {
+                    this.handleDissectorFile(files[0]);
+                } else {
+                    alert('Please drop an MP4 file.');
+                }
+            });
+        }
+
+        if (dissectorFileInput) {
+            dissectorFileInput.addEventListener('change', (e) => {
+                const files = e.target.files;
+                if (files.length > 0 && files[0].type === 'video/mp4') {
+                    this.handleDissectorFile(files[0]);
+                } else {
+                    alert('Please select an MP4 file.');
+                }
+            });
+        }
+
+        if (dissectBtn) {
+            dissectBtn.addEventListener('click', () => this.dissectSong());
+        }
+
+        // Add track button
+        const addTrackBtn = document.getElementById('addTrackBtn');
+        if (addTrackBtn) {
+            addTrackBtn.addEventListener('click', () => this.addNewTrack());
+        }
+    }
+
+    /**
+     * Handle a file selected for the song dissector
+     * @param {File} file - The MP4 file
+     */
+    handleDissectorFile(file) {
+        if (!this.audioContext) {
+            this.initAudio();
+        }
+
+        this.dissectorFile = file;
+
+        // Update UI
+        const dissectBtn = document.getElementById('dissectBtn');
+        if (dissectBtn) {
+            dissectBtn.disabled = false;
+            dissectBtn.textContent = `Dissect ${file.name}`;
+        }
+
+        // Hide previous results
+        const dissectionResults = document.getElementById('dissectionResults');
+        if (dissectionResults) dissectionResults.classList.add('hidden');
+    }
+
+    /**
+     * Start the song dissection process
+     */
+    dissectSong() {
+        if (!this.dissectorFile || !this.songDissector) return;
+
+        // Disable dissect button
+        const dissectBtn = document.getElementById('dissectBtn');
+        if (dissectBtn) dissectBtn.disabled = true;
+
+        // Show progress
+        const dissectionProgress = document.getElementById('dissectionProgress');
+        if (dissectionProgress) dissectionProgress.classList.remove('hidden');
+
+        // Reset progress bar
+        const progressFill = document.querySelector('.progress-fill');
+        if (progressFill) progressFill.style.width = '0%';
+
+        // Start dissection
+        this.songDissector.processFile(this.dissectorFile)
+            .catch(error => {
+                console.error('Error in dissection process:', error);
+            });
+    }
+
+    /**
+     * Preview a component
+     * @param {string} componentId - The component ID
+     */
+    previewComponent(componentId) {
+        const component = this.extractedComponents.find(c => c.id === componentId);
+        if (!component) return;
+
+        // Create a source node
+        const source = this.audioContext.createBufferSource();
+        source.buffer = component.buffer;
+
+        // Connect to effects chain
+        source.connect(this.effects.filter.getNode());
+
+        // Start playback
+        source.start(0);
+
+        // Store source for potential stopping
+        this.audioEngine.addActiveSource(`component-${componentId}`, source);
+    }
+
+    /**
+     * Add a component to the track editor
+     * @param {string} componentId - The component ID
+     */
+    addComponentToTrack(componentId) {
+        const component = this.extractedComponents.find(c => c.id === componentId);
+        if (!component) return;
+
+        // Find the first available track
+        const tracks = document.querySelectorAll('.track');
+        if (tracks.length === 0) return;
+
+        const track = tracks[0];
+
+        // Create a clip
+        const clip = document.createElement('div');
+        clip.className = 'clip';
+        clip.style.left = '10px';
+        clip.style.width = '100px';
+        clip.dataset.time = 0;
+        clip.dataset.duration = 2;
+        clip.dataset.componentId = componentId;
+
+        // Add clip content
+        clip.innerHTML = `
+            <div class="clip-handle left"></div>
+            <div class="clip-content">${component.name}</div>
+            <div class="clip-handle right"></div>
+        `;
+
+        track.appendChild(clip);
+
+        // Make clip interactive
+        this.makeClipInteractive(clip);
+    }
+
+    /**
+     * Make a clip interactive (draggable and resizable)
+     * @param {HTMLElement} clip - The clip element
+     */
+    makeClipInteractive(clip) {
+        let isDragging = false;
+        let isResizingLeft = false;
+        let isResizingRight = false;
+        let startX = 0;
+        let startLeft = 0;
+        let startWidth = 0;
+
+        const leftHandle = clip.querySelector('.clip-handle.left');
+        const rightHandle = clip.querySelector('.clip-handle.right');
+
+        // Left resize handle
+        leftHandle.addEventListener('mousedown', (e) => {
+            isResizingLeft = true;
+            startX = e.clientX;
+            startLeft = parseInt(clip.style.left) || 0;
+            startWidth = parseInt(clip.style.width) || 0;
+            e.stopPropagation();
+        });
+
+        // Right resize handle
+        rightHandle.addEventListener('mousedown', (e) => {
+            isResizingRight = true;
+            startX = e.clientX;
+            startWidth = parseInt(clip.style.width) || 0;
+            e.stopPropagation();
+        });
+
+        // Clip dragging
+        clip.addEventListener('mousedown', (e) => {
+            if (!isResizingLeft && !isResizingRight) {
+                isDragging = true;
+                startX = e.clientX;
+                startLeft = parseInt(clip.style.left) || 0;
+            }
+        });
+
+        // Mouse move handler
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const dx = e.clientX - startX;
+                clip.style.left = `${Math.max(0, startLeft + dx)}px`;
+            } else if (isResizingLeft) {
+                const dx = e.clientX - startX;
+                const newLeft = Math.max(0, startLeft + dx);
+                const newWidth = Math.max(10, startWidth - dx);
+
+                clip.style.left = `${newLeft}px`;
+                clip.style.width = `${newWidth}px`;
+            } else if (isResizingRight) {
+                const dx = e.clientX - startX;
+                clip.style.width = `${Math.max(10, startWidth + dx)}px`;
+            }
+        });
+
+        // Mouse up handler
+        document.addEventListener('mouseup', () => {
+            if (isDragging || isResizingLeft || isResizingRight) {
+                // Update clip data attributes
+                clip.dataset.time = parseInt(clip.style.left) / 100;
+                clip.dataset.duration = parseInt(clip.style.width) / 100;
+            }
+
+            isDragging = false;
+            isResizingLeft = false;
+            isResizingRight = false;
+        });
+    }
+
+    /**
+     * Add a new track to the track editor
+     */
+    addNewTrack() {
+        const trackLabels = document.querySelector('.track-labels');
+        const trackContent = document.querySelector('.track-content');
+
+        if (!trackLabels || !trackContent) return;
+
+        // Get the next track number
+        const trackCount = trackLabels.children.length + 1;
+
+        // Create track label
+        const trackLabel = document.createElement('div');
+        trackLabel.className = 'track-label';
+        trackLabel.textContent = `Track ${trackCount}`;
+        trackLabels.appendChild(trackLabel);
+
+        // Create track
+        const track = document.createElement('div');
+        track.className = 'track';
+        track.dataset.track = trackCount;
+        trackContent.appendChild(track);
     }
 }
 
